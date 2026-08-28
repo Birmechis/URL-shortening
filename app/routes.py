@@ -38,8 +38,20 @@ def shorten_url():
             "id": new_url.id,
             "url": new_url.url,
             "shortCode": new_url.shortCode,
-            "shorten_url": f"{request.host_url}{new_url.shortCode}",
             "createdAt": new_url.createdAt.isoformat() if new_url.createdAt else None,
             "updatedAt": new_url.updatedAt.isoformat() if new_url.updatedAt else None
         }
     ), 201
+@api_bp.route('/shorten/<shortCode>', methods=['GET'])
+def get_original_url(shortCode=None):
+    data = ShortURL.query.filter_by(shortCode=shortCode).first()
+    if not data:
+        return jsonify({"error": "URL parameter is required"}), 400
+    return jsonify(
+        {
+            "id": data.id,
+            "url": data.url,
+            "createdAt": data.createdAt.isoformat() if data.createdAt else None,
+            "updatedAt": data.updatedAt.isoformat() if data.updatedAt else None
+        }
+    ), 404
