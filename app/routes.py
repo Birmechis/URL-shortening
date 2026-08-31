@@ -55,3 +55,37 @@ def get_original_url(shortCode=None):
             "updatedAt": data.updatedAt.isoformat() if data.updatedAt else None
         }
     ), 404
+
+@api_bp.route('/shorten/<shortCode>', methods=['PUT'])
+def update_short_url(shortCode):
+    data = request.get_json() or {}
+    original_url = data.get("url")
+
+    if not original_url:
+        return jsonify({"error": "URL parameter is required"}), 400
+
+    updates = ShortURL(url=original_url, shortCode=shortCode, accessCount=0)
+
+    try:
+        updates.url = request.json['url']
+
+        db.session.commit()
+        return jsonify(
+            {
+                "url": updates.url
+            }
+        ), 200
+    except Exception:
+        db.session.rollback()
+        return jsonify({"error"}), 400
+
+@api_bp.route('/shorten/<shortCode>', methods=['DELETE'])
+def delete_short_url(shortCode):
+    deletes = ShortURL.query.filter_by(shortCode=shortCode).first()
+
+    if not deletes:
+        return jsonify({"error": "URL parameter is not found"}), 404
+    db.session.delete(deletes)
+    db.session.commit()
+
+    return jsonify({"success": True}), 200
