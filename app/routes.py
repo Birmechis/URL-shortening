@@ -89,3 +89,20 @@ def delete_short_url(shortCode):
     db.session.commit()
 
     return jsonify({"success": True}), 200
+
+@api_bp.route('/shorten/<shortCode>/stats', methods=['GET'])
+def get_stats(shortCode):
+    code = ShortURL.query.filter_by(shortCode=shortCode).first()
+    if not code:
+        return jsonify({"error": "URL parameter is not found"}), 404
+
+    stats = code.accessCount if code.accessCount else 0
+
+    return jsonify({
+        "id": code.id,
+        "url": code.url,
+        "shortCode": code.shortCode,
+        "createdAt": code.createdAt.isoformat() if code.createdAt else None,
+        "updatedAt": code.updatedAt.isoformat() if code.updatedAt else None,
+        "accessCount": stats
+    }), 200
