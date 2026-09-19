@@ -27,18 +27,24 @@ This URL Shortener is a RESTful API service that:
 ### Project Structure
 
 ```
-url shortening/
+url-shortening/
 ├── app/
 │   ├── __init__.py          # Flask app factory and configuration
 │   ├── models.py            # Database models (ShortURL)
-│   ├── routes.py            # API endpoints and business logic
-│   └── __pycache__/         # Python cache files
-├── instance/
-│   └── data.db              # SQLite database file
-├── .venv/                   # Virtual environment
-├── requirements.tx          # Python dependencies
+│   └── routes.py            # API endpoints and business logic
+├── tests/                   # Test suite (to be added)
+├── .env.example             # Example environment configuration
+├── .gitignore               # Git ignore rules
+├── README.md                # Project documentation
+├── requirements.txt         # Python dependencies
 └── run.py                   # Application entry point
 ```
+
+**Note**: The following are generated at runtime and excluded from Git:
+- `.venv/` - Virtual environment (recreated via `python -m venv .venv`)
+- `instance/data.db` - SQLite database (created automatically on first run)
+- `__pycache__/` - Python bytecode cache
+- `.env` - Your local environment variables (use `.env.example` as template)
 
 ### Technology Stack
 
@@ -206,10 +212,16 @@ Retrieve statistics for a shortened URL, including access count.
 
 4. **Install dependencies**:
    ```bash
-   pip install -r requirements.tx
+   pip install -r requirements.txt
    ```
 
-5. **Create a `.env` file** in the project root:
+5. **Create a `.env` file** from the example:
+   ```bash
+   # Copy the example file
+   cp .env.example .env
+   ```
+   
+   The `.env` file should contain:
    ```env
    DATABASE_URL=sqlite:///instance/data.db
    ```
