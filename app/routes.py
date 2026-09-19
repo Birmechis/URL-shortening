@@ -1,8 +1,9 @@
 import string
 import secrets
-from os import access
 from urllib.parse import urlparse
+
 from flask import Blueprint, request, jsonify, redirect
+
 from app import db
 from app.models import ShortURL
 
@@ -17,7 +18,19 @@ def generate_short_code(length=6):
 
 @api_bp.route('/shorten', methods=['POST'])
 def shorten_url():
-    data = request.get_json() or {}
+
+    if not request.is_json:
+        return jsonify({
+            "error": "Request body must be JSON"
+        }), 400
+
+    data = request.get_json()
+
+    if not isinstance(data, dict):
+        return jsonify({
+            "error": "Request body must be a JSON object"
+        }), 400
+
     original_url = data.get("url")
 
     if not original_url:
@@ -65,7 +78,9 @@ def shorten_url():
 def get_original_url(shortCode=None):
     data = ShortURL.query.filter_by(shortCode=shortCode).first()
     if not data:
-        return jsonify({"error": "URL parameter is required"}), 400
+        return jsonify({
+            "error": "Short URL not found"
+        }), 404
     return jsonify(
         {
             "id": data.id,
@@ -74,37 +89,76 @@ def get_original_url(shortCode=None):
             "updatedAt": data.updatedAt.isoformat() if data.updatedAt else None,
             "accessCount": data.accessCount if data.accessCount else 0
         }
-    ), 404
+    ), 200
 
 @api_bp.route('/shorten/<shortCode>', methods=['PUT'])
 def update_short_url(shortCode):
-    data = request.get_json() or {}
+
+    if not request.is_json:
+        return jsonify({
+            "error": "Request body must be JSON"
+        }), 400
+
+    data = request.get_json()
+
+    if not isinstance(data, dict):
+        return jsonify({
+            "error": "Request body must be a JSON object"
+        }), 400
+
     original_url = data.get("url")
 
     if not original_url:
         return jsonify({"error": "URL parameter is required"}), 400
 
-    updates = ShortURL(url=original_url, shortCode=shortCode, accessCount=0)
+    if not isinstance(original_url, str):
+        return jsonify({"error": "URL must be a string"}), 400
+
+    original_url = original_url.strip()
+
+    if not original_url:
+        return jsonify({"error": "URL cannot be empty"}), 400
+
+    parsed_url = urlparse(original_url)
+
+    if parsed_url.schema not in ("http", "https"):
+        return jsonify({"error": "URL schema must be http or https"}), 400
+
+    if not parsed_url.netloc:
+        return jsonify({"error": "URL must contain a valid domain"}), 400
+
+    short_url = ShortURL.query.filter_by(shortCode=shortCode).first()
+
+    if not short_url:
+        return jsonify({"error": "Short URL not found"}), 404
+
+    short_url.url = original_url
 
     try:
-        updates.url = request.json['url']
-
         db.session.commit()
-        return jsonify(
-            {
-                "url": updates.url
-            }
-        ), 200
     except Exception:
         db.session.rollback()
-        return jsonify({"error"}), 400
+        return jsonify({
+            "error": "Database update failed"
+        }), 500
+
+    return jsonify({
+        "id": short_url.id,
+        "url": short_url.url,
+        "shortCode": short_url.shortCode,
+        "createdAt": short_url.createdAt.isoformat()
+        if short_url.createdAt else None,
+        "updatedAt": short_url.updatedAt.isoformat()
+        if short_url.updatedAt else None,
+        "accessCount": short_url.accessCount
+    }), 200
 
 @api_bp.route('/shorten/<shortCode>', methods=['DELETE'])
 def delete_short_url(shortCode):
     deletes = ShortURL.query.filter_by(shortCode=shortCode).first()
 
     if not deletes:
-        return jsonify({"error": "URL parameter is not found"}), 404
+        return jsonify({"error": "Short URL not found"}), 404
     db.session.delete(deletes)
     db.session.commit()
 
@@ -114,7 +168,7 @@ def delete_short_url(shortCode):
 def get_stats(shortCode):
     code = ShortURL.query.filter_by(shortCode=shortCode).first()
     if not code:
-        return jsonify({"error": "URL parameter is not found"}), 404
+        return jsonify({"error": "Short URL not found"}), 404
 
 
     return jsonify({
@@ -134,11 +188,8 @@ def redirect_url(shortCode):
         return jsonify({
             "error": "Short URL not found"
         }), 404
-    print("BEFORE:", shortUrl.accessCount)
 
     shortUrl.accessCount += 1
     db.session.commit()
-
-    print("AFTER:", shortUrl.accessCount)
 
     return redirect(shortUrl.url, code=302)
