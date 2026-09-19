@@ -3,6 +3,7 @@ import secrets
 from urllib.parse import urlparse
 
 from flask import Blueprint, request, jsonify, redirect
+from sqlalchemy.exc import IntegrityError
 
 from app import db
 from app.models import ShortURL
@@ -61,9 +62,11 @@ def shorten_url():
     try:
         db.session.add(new_url)
         db.session.commit()
-    except Exception:
+    except IntegrityError:
         db.session.rollback()
-        return jsonify({"error": "Database entry creation failed"}), 500
+        return jsonify({
+            "error": "Short code already exists"
+        }), 409
 
     return jsonify(
         {
