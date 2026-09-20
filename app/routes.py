@@ -124,7 +124,7 @@ def update_short_url(shortCode):
 
     parsed_url = urlparse(original_url)
 
-    if parsed_url.schema not in ("http", "https"):
+    if parsed_url.scheme not in ("http", "https"):
         return jsonify({"error": "URL schema must be http or https"}), 400
 
     if not parsed_url.netloc:

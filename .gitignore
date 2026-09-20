@@ -14,4 +14,4 @@ instance/
 
 # IDE
 .idea/
-.vscode/
+.vscode/__pycache__/
