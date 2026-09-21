@@ -17,6 +17,10 @@ class ShortURL(db.Model):
         nullable=False
     )
     accessCount = db.Column(db.Integer, default=0, nullable=False)
+    expiresAt = db.Column(
+        db.DateTime,
+        nullable=True,
+    )
 
     def __repr__(self):
         return f"<ShortURL {self.shortCode}>"

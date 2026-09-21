@@ -1,3 +1,7 @@
+from app.models import ShortURL
+from datetime import datetime, timezone
+from app import db
+
 def test_create_short_url(app):
 
     client = app.test_client()
@@ -217,3 +221,107 @@ def test_delete_url(app):
     response = client.get(f"/shorten/{short_code}")
 
     assert response.status_code == 404
+
+def test_short_url_without_expiration(app):
+
+    client = app.test_client()
+
+    response = client.post(
+        "/shorten",
+        json = {"url": "http://example.com"}
+    )
+
+    assert response.status_code == 201
+
+    data = response.get_json()
+    short_code = data['shortCode']
+
+    assert data['expiresAt'] is None
+
+    response = client.get(
+        f"/{short_code}",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 302
+    assert response.location == "http://example.com"
+
+def test_short_url_with_future_expiration(app):
+
+    client = app.test_client()
+
+    response = client.post(
+        "/shorten",
+        json ={
+            "url": "http://example.com",
+            "expiresAt": "2099-01-01T12:00:00"
+        }
+    )
+
+    assert response.status_code == 201
+
+    data = response.get_json()
+    short_code = data['shortCode']
+
+    response = client.get(
+        f"/{short_code}",
+        follow_redirects=False
+    )
+    assert response.status_code == 302
+    assert response.location == "http://example.com"
+
+def test_invalid_expiration_date(app):
+
+    client = app.test_client()
+
+    response = client.post(
+        '/shorten',
+        json = {
+            "url": "http://example.com",
+            "expiresAt": "tomorrow"
+        }
+    )
+
+    assert response.status_code == 400
+
+def test_already_expired_date(app):
+
+    client = app.test_client()
+
+    response = client.post(
+        '/shorten',
+        json = {
+            "url": "http://example.com",
+            "expiresAt": "2020-01-01T12:00:00"
+        }
+    )
+
+    assert response.status_code == 400
+
+def test_short_url_expired(app):
+
+    client = app.test_client()
+
+    response = client.post(
+        '/shorten',
+        json = {
+            "url": "http://example.com",
+        }
+    )
+
+    assert response.status_code == 201
+
+    data = response.get_json()
+    short_code = data['shortCode']
+
+    short_url = ShortURL.query.filter_by(shortCode=short_code).first()
+
+    short_url.expiresAt = datetime(2020,1,1,tzinfo=timezone.utc)
+    db.session.commit()
+
+    response = client.get(
+        f"/{short_code}",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 410
