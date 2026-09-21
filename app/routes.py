@@ -1,7 +1,7 @@
 import string
 import secrets
 from urllib.parse import urlparse
-
+from  datetime import datetime, timezone
 from flask import Blueprint, request, jsonify, redirect
 from sqlalchemy.exc import IntegrityError
 
@@ -53,10 +53,28 @@ def shorten_url():
     if not parsed_url.netloc:
         return jsonify({"error": "URL must contain a valid domain"}), 400
 
+    expires_at = data.get("expiresAt")
+
+    if expires_at:
+        try:
+            expires_at = datetime.fromisoformat(expires_at)
+        except ValueError:
+            return jsonify({
+                "error": "Invalid expiration date format"
+            }), 400
+
+    if expires_at:
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+        if expires_at <= datetime.now(timezone.utc):
+            return jsonify({
+                "error": "Expiration date must be in the future"
+            }), 400
 
     generate_code = generate_short_code()
 
-    new_url = ShortURL(url=original_url, shortCode=generate_code, accessCount=0)
+    new_url = ShortURL(url=original_url, shortCode=generate_code, accessCount=0, expiresAt=expires_at)
 
 
     try:
@@ -74,9 +92,10 @@ def shorten_url():
             "url": new_url.url,
             "shortCode": new_url.shortCode,
             "createdAt": new_url.createdAt.isoformat() if new_url.createdAt else None,
-            "updatedAt": new_url.updatedAt.isoformat() if new_url.updatedAt else None
+            "expiresAt": new_url.expiresAt.isoformat() if new_url.expiresAt else None
         }
     ), 201
+
 @api_bp.route('/shorten/<shortCode>', methods=['GET'])
 def get_original_url(shortCode=None):
     data = ShortURL.query.filter_by(shortCode=shortCode).first()
@@ -191,6 +210,17 @@ def redirect_url(shortCode):
         return jsonify({
             "error": "Short URL not found"
         }), 404
+
+    if shortUrl.expiresAt:
+        expires_at = shortUrl.expiresAt
+
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+        if expires_at <= datetime.now(timezone.utc):
+            return jsonify({
+                "error": "Short URL has expired"
+            }), 410
 
     shortUrl.accessCount += 1
     db.session.commit()
