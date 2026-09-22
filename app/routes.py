@@ -3,6 +3,7 @@ import secrets
 from urllib.parse import urlparse
 from  datetime import datetime, timezone
 from flask import Blueprint, request, jsonify, redirect
+from .extensions import limiter
 from sqlalchemy.exc import IntegrityError
 
 from app import db
@@ -18,6 +19,7 @@ def generate_short_code(length=6):
             return code
 
 @api_bp.route('/shorten', methods=['POST'])
+@limiter.limit("3 per minute")
 def shorten_url():
 
     if not request.is_json:
