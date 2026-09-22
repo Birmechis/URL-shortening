@@ -325,3 +325,25 @@ def test_short_url_expired(app):
     )
 
     assert response.status_code == 410
+
+def test_rate_limit(app):
+
+    client = app.test_client()
+
+    for _ in range(3):
+        response = client.post(
+            '/shorten',
+            json={
+                "url": "http://example.com",
+            }
+        )
+        assert response.status_code == 201
+
+    response = client.post(
+        '/shorten',
+        json={
+            "url": "http://example.com",
+        }
+    )
+
+    assert response.status_code == 429

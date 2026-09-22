@@ -15,3 +15,7 @@ instance/
 # IDE
 .idea/
 .vscode/__pycache__/
+
+# postman folders
+.postman/
+postman/

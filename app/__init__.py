@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 from flask import Flask, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from .extensions import limiter
 
 load_dotenv()
 db = SQLAlchemy()
@@ -16,6 +17,7 @@ def create_app(config=None):
         app.config.update(config)
 
     db.init_app(app)
+    limiter.init_app(app)
 
     from app.routes import api_bp
     app.register_blueprint(api_bp)
@@ -31,5 +33,11 @@ def create_app(config=None):
         return jsonify({
             "error": "Internal server error"
         }), 500
+
+    @app.errorhandler(429)
+    def handle_rate_limit(error):
+        return jsonify({
+            "error": "Too many requests"
+        }), 429
 
     return app
