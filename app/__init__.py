@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from flask import Flask, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from .extensions import limiter
+from .extensions import limiter, jwt
 
 load_dotenv()
 db = SQLAlchemy()
@@ -12,12 +12,14 @@ def create_app(config=None):
 
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')
 
     if config:
         app.config.update(config)
 
     db.init_app(app)
     limiter.init_app(app)
+    jwt.init_app(app)
 
     from app.routes import api_bp
     app.register_blueprint(api_bp)
