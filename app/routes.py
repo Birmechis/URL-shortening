@@ -377,5 +377,5 @@ def login():
 
     return jsonify({
         'message': 'Successfully logged in',
-        'token': token
+        'access_token': token
     }), 200
