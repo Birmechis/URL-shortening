@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+from email.policy import default
+
 from app import db
 
 class User(db.Model):
@@ -45,3 +47,15 @@ class ShortURL(db.Model):
     def __repr__(self):
         return f"<ShortURL {self.shortCode}>"
 
+class URLVisit(db.Model):
+    id=db.Column(db.Integer, primary_key=True)
+
+    short_url_id=db.Column(db.Integer, db.ForeignKey(ShortURL.id), nullable=False)
+
+    visited_at=db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    ip_address=db.Column(db.String(100), nullable=True)
+
+    user_agent=db.Column(db.Text, nullable=True)
+
+    referrer=db.Column(db.Text, nullable=True)
