@@ -11,7 +11,7 @@ from werkzeug.security import generate_password_hash
 from werkzeug.security import check_password_hash
 
 from app import db
-from app.models import ShortURL, User
+from app.models import ShortURL, User, URLVisit
 
 api_bp = Blueprint('api', __name__)
 
@@ -270,15 +270,22 @@ def redirect_url(shortCode):
             }), 410
 
     shortUrl.accessCount += 1
+
+    visit = URLVisit(
+        short_url_id=shortUrl.id,
+        visited_at=datetime.now(timezone.utc),
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get('User-Agent'),
+        referrer=request.referrer
+    )
+
+    db.session.add(visit)
     db.session.commit()
 
     return redirect(shortUrl.url, code=302)
 
 @api_bp.route('/register', methods=['POST'])
 def register():
-
-    print("CONTENT TYPE:", request.content_type)
-    print("RAW DATA:", request.get_data(as_text=True))
 
     if not request.is_json:
         return jsonify({
@@ -296,9 +303,6 @@ def register():
 
     email = data.get('email')
     password = data.get('password')
-
-    print("EMAIL:", email)
-    print("PASSWORD:", password)
 
     if not email or not password:
         return jsonify({
@@ -378,4 +382,41 @@ def login():
     return jsonify({
         'message': 'Successfully logged in',
         'access_token': token
+    }), 200
+
+@api_bp.route("/shorten/<shortCode>/analytics", methods=['GET'])
+@jwt_required()
+def analytics(shortCode):
+
+    current_user_id = int(get_jwt_identity())
+
+    url_record = ShortURL.query.filter_by(shortCode=shortCode).first()
+
+    if not url_record:
+        return jsonify({
+            "error": "Short URL not found"
+        }), 404
+
+    if url_record.user_id != current_user_id:
+        return jsonify({
+            "error": "You are authenticated, but you're not allowed to do this "
+        }), 403
+
+    visits =  URLVisit.query.filter_by(
+        short_url_id=url_record.id
+    ).order_by(
+        URLVisit.visited_at.desc()
+    ).limit(20).all()
+
+    return jsonify({
+        "totalVisits": url_record.accessCount,
+        "recentVisits":[
+            {
+                "visitedAt": visit.visited_at.isoformat(),
+                "ipAddress": visit.ip_address,
+                "userAgent": visit.user_agent,
+                "referrer": visit.referrer
+            }
+            for visit in visits
+        ]
     }), 200
