@@ -2,10 +2,12 @@ import os
 from dotenv import load_dotenv
 from flask import Flask, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 from .extensions import limiter, jwt
 
 load_dotenv()
 db = SQLAlchemy()
+migrate = Migrate()
 
 def create_app(config=None):
     app = Flask(__name__)
@@ -18,6 +20,7 @@ def create_app(config=None):
         app.config.update(config)
 
     db.init_app(app)
+    migrate.init_app(app, db)
     limiter.init_app(app)
     jwt.init_app(app)
 
