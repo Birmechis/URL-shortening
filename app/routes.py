@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 from  datetime import datetime, timezone
 from flask import Blueprint, request, jsonify, redirect
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
-
+from sqlalchemy import text
 from .extensions import limiter
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash
@@ -419,4 +419,12 @@ def analytics(shortCode):
             }
             for visit in visits
         ]
+    }), 200
+
+@api_bp.route("/health")
+def health():
+    db.session.execute(text("SELECT 1"))
+
+    return jsonify({
+        "status": "healthy"
     }), 200
