@@ -1,13 +1,17 @@
 import os
+import redis
 from dotenv import load_dotenv
 from flask import Flask, jsonify
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-from .extensions import limiter, jwt
+from .extensions import (
+    db,
+    jwt,
+    limiter,
+    migrate,
+    create_redis_client
+)
 
 load_dotenv()
-db = SQLAlchemy()
-migrate = Migrate()
+
 
 def create_app(config=None):
     app = Flask(__name__)
@@ -15,6 +19,11 @@ def create_app(config=None):
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')
+    app.config["REDIS_URL"] = os.getenv('REDIS_URL')
+
+    app.redis = create_redis_client(
+        app.config['REDIS_URL']
+    )
 
     if config:
         app.config.update(config)
