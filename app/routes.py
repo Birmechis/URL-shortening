@@ -9,7 +9,7 @@ from .extensions import limiter
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash
 from werkzeug.security import check_password_hash
-
+from flask import current_app
 from app import db
 from app.models import ShortURL, User, URLVisit
 
@@ -21,6 +21,10 @@ def generate_short_code(length=6):
         code = ''.join(secrets.choice(characters) for _ in range(length))
         if not ShortURL.query.filter_by(shortCode=code).first():
             return code
+
+def invalidate_cache(shortCode):
+    cache_key = f"short_url:{shortCode}"
+    current_app.redis.delete(cache_key)
 
 @api_bp.route('/shorten', methods=['POST'])
 @limiter.limit("3 per minute")
@@ -168,24 +172,19 @@ def update_short_url(shortCode):
     user_id = int(get_jwt_identity())
     short_url = ShortURL.query.filter_by(shortCode=shortCode).first()
 
-    print("JWT USER ID:", user_id)
-    print("JWT USER ID TYPE:", type(user_id))
-
-    print("URL OWNER ID:", short_url.user_id)
-    print("URL OWNER ID TYPE:", type(short_url.user_id))
+    if not short_url:
+        return jsonify({"error": "Short URL not found"}), 404
 
     if short_url.user_id != user_id:
         return jsonify({
             "error": "You do not have permission to modify this URL"
         }), 403
 
-    if not short_url:
-        return jsonify({"error": "Short URL not found"}), 404
-
     short_url.url = original_url
 
     try:
         db.session.commit()
+        invalidate_cache(shortCode)
     except Exception:
         db.session.rollback()
         return jsonify({
@@ -213,7 +212,7 @@ def delete_short_url(shortCode):
     if not short_url:
         return jsonify({
             'error': 'Short URL not found'
-        }), 401
+        }), 404
 
     if short_url.user_id != user_id:
         return jsonify({
@@ -222,6 +221,7 @@ def delete_short_url(shortCode):
 
     db.session.delete(short_url)
     db.session.commit()
+    invalidate_cache(shortCode)
 
     return jsonify({"success": True}), 200
 
@@ -251,6 +251,50 @@ def get_stats(shortCode):
 
 @api_bp.route("/<shortCode>", methods=['GET'])
 def redirect_url(shortCode):
+
+    cache_key = f"short_url:{shortCode}"
+
+    cached_url = current_app.redis.get(cache_key)
+
+    if cached_url:
+        print("[CACHE] HIT")
+        shortUrl = ShortURL.query.filter_by(shortCode=shortCode).first()
+
+        if not shortUrl:
+            current_app.redis.delete(cache_key)
+            return jsonify({
+                "error": "Short URL not found"
+            }), 404
+
+        if shortUrl.expiresAt:
+            expires_at = shortUrl.expiresAt
+
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+            if expires_at <= datetime.now(timezone.utc):
+                current_app.redis.delete(cache_key)
+                return jsonify({
+                    "error": "Short URL has expired"
+                }), 410
+
+        shortUrl.accessCount += 1
+
+        visit = URLVisit(
+            short_url_id=shortUrl.id,
+            visited_at=datetime.now(timezone.utc),
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent'),
+            referrer=request.referrer
+        )
+
+        db.session.add(visit)
+        db.session.commit()
+
+        return redirect(cached_url, code=302)
+
+    print("[CACHE] MISS")
+
     shortUrl = ShortURL.query.filter_by(shortCode=shortCode).first()
 
     if not shortUrl:
@@ -268,7 +312,6 @@ def redirect_url(shortCode):
             return jsonify({
                 "error": "Short URL has expired"
             }), 410
-
     shortUrl.accessCount += 1
 
     visit = URLVisit(
@@ -281,6 +324,14 @@ def redirect_url(shortCode):
 
     db.session.add(visit)
     db.session.commit()
+
+    current_app.redis.set(
+        cache_key,
+        shortUrl.url,
+        ex=300
+    )
+
+    print("[CACHE] STORED")
 
     return redirect(shortUrl.url, code=302)
 
@@ -353,17 +404,17 @@ def login():
     if not request.is_json:
         return jsonify({
             "error": "Request body must be JSON"
-        })
+        }), 400
 
     data = request.get_json()
 
     if not isinstance(data, dict):
         return jsonify({
             "error": "Request body must be json object"
-        })
+        }), 400
 
-    email = request.json.get('email')
-    password = request.json.get('password')
+    email = data.get('email')
+    password = data.get('password')
 
     user = User.query.filter_by(email=email).first()
 
