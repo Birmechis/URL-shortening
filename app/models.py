@@ -6,7 +6,7 @@ class User(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(100), unique=True, nullable=False)
-    password_hash = db.Column(db.String(120), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     def __repr__(self):
@@ -41,6 +41,12 @@ class ShortURL(db.Model):
     )
 
     user = db.relationship("User", backref="short_urls")
+
+    visits = db.relationship(
+        "URLVisit",
+        backref="short_urls",
+        cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<ShortURL {self.shortCode}>"
